@@ -109,7 +109,7 @@
 <body>
 <header>
   <h1>Sistema de Turnos · Enfermeras (EU)</h1>
-  <p>Tres libros (Médicos, TENS, EU), turnos 12/24h, pauta día/noche, ajustes, mutualidad, nube y PDF. Exento. · versión v13</p>
+  <p>Tres libros (Médicos, TENS, EU), turnos 12/24h, pauta día/noche, ajustes, mutualidad, nube y PDF. Exento. · versión v15</p>
 </header>
 <div class="books no-print" id="books" style="display:none"></div>
 <div class="topbar no-print">
@@ -181,7 +181,7 @@
       </div>
       <p class="legend" id="nomMsg" style="margin:8px 0 0">Columnas Excel: RUT, Nombre, Apellido, Cargo (EU/TENS/MÉDICO), Teléfono, Banco, Tipo cuenta, N° cuenta, Email.</p>
     </div>
-    <table class="cfg"><thead><tr><th>RUT</th><th>Nombre</th><th>Apellido</th><th>Cargo</th><th>Teléfono</th><th>Banco</th><th>N° cuenta</th><th>Email</th><th></th></tr></thead><tbody id="nombody"></tbody></table>
+    <table class="cfg"><thead><tr><th>RUT</th><th>Nombre</th><th>Apellido</th><th>Cargo</th><th>Teléfono</th><th>Banco</th><th>Tipo cuenta</th><th>N° cuenta</th><th>Email</th><th></th></tr></thead><tbody id="nombody"></tbody></table>
   </section>
   <section id="extra">
     <p class="legend">Cobertura extra de TENS (casos excepcionales): agrega turnos adicionales por día. Se pagan con la misma tarifa del servicio y entran al Resumen; los ajustes por retraso de la persona también aplican.</p>
@@ -454,10 +454,33 @@ function importarTurnosCSV(inp){const file=inp.files[0];if(!file)return;const rd
   }catch(err){alert("No se pudo leer el archivo (guárdalo como CSV).\n"+err);}inp.value="";};rd.readAsText(file,"UTF-8");}
 // NÓMINA
 function normGrupo(s){s=(s||"").toString().toUpperCase();if(/MED|MÉD/.test(s))return "MÉDICO";if(/TENS/.test(s))return "TENS";if(/EU|ENFERM/.test(s))return "EU";return s.trim()||"EU";}
-function renderNom(){$("nombody").innerHTML=TODOS.map((p,i)=>`<tr><td>${p.rut||""}</td><td>${p.nombre||""}</td><td>${p.apellido||""}</td><td><span class="chip ${p.grupo}">${p.grupo}</span></td><td>${p.telefono||""}</td><td>${p.banco||""}</td><td>${p.numCuenta||""}</td><td>${p.email||""}</td><td><button class="b-ghost no-print" style="padding:4px 8px" onclick="borrarPersona(${i})">✕</button></td></tr>`).join("")||`<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:18px">Nómina vacía.</td></tr>`;
+function escv(v){return (v==null?"":String(v)).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");}
+function setNomCampo(i,c,v){if(!TODOS[i])return;TODOS[i][c]=(typeof v==="string")?v.trim():v;guardarNominaLS();flash();}
+function optsTipoCuenta(sel){var ops=["","CUENTA CORRIENTE","CUENTA VISTA","RUT","AHORRO"];var s=(sel||"").toUpperCase();if(s&&ops.indexOf(s)<0)ops.push(s);return ops.map(function(o){return "<option value='"+o+"' "+(o===s?"selected":"")+">"+(o||"—")+"</option>";}).join("");}
+function renderNom(){$("nombody").innerHTML=TODOS.map((p,i)=>`<tr><td>${p.rut||""}</td><td>${p.nombre||""}</td><td>${p.apellido||""}</td><td><span class="chip ${p.grupo}">${p.grupo}</span></td><td><input type="text" style="width:110px;text-align:left" value="${escv(p.telefono)}" onchange="setNomCampo(${i},'telefono',this.value)"></td><td><input type="text" style="width:110px;text-align:left" value="${escv(p.banco)}" onchange="setNomCampo(${i},'banco',this.value)"></td><td><select style="padding:5px" onchange="setNomCampo(${i},'tipoCuenta',this.value)">${optsTipoCuenta(p.tipoCuenta)}</select></td><td><input type="text" style="width:110px;text-align:left" value="${escv(p.numCuenta)}" onchange="setNomCampo(${i},'numCuenta',this.value)"></td><td><input type="text" style="width:170px;text-align:left" value="${escv(p.email)}" onchange="setNomCampo(${i},'email',this.value)"></td><td><button class="b-ghost no-print" style="padding:4px 8px" onclick="borrarPersona(${i})">✕</button></td></tr>`).join("")||`<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:18px">Nómina vacía.</td></tr>`;
   const c=g=>TODOS.filter(p=>p.grupo===g).length;$("nomMsg").innerHTML=`Personal: <b>${TODOS.length}</b> · EU ${c("EU")} · TENS ${c("TENS")} · Médicos ${c("MÉDICO")}. Columnas Excel: RUT, Nombre, Apellido, Cargo, Teléfono, Banco, Tipo cuenta, N° cuenta, Email.`;}
 function borrarPersona(i){if(!confirm("¿Quitar a "+TODOS[i].nombre+" "+TODOS[i].apellido+"?"))return;TODOS.splice(i,1);guardarNominaLS();refrescar();}
-function agregarPersonaManual(){const rut=prompt("RUT:");if(!rut)return;const nombre=prompt("Nombre:")||"",apellido=prompt("Apellido:")||"",grupo=normGrupo(prompt("Cargo (EU, TENS o MÉDICO):")||"EU");TODOS.push({rut:rut.trim(),nombre:nombre.trim(),apellido:apellido.trim(),cargo:grupo,grupo,telefono:"",banco:"",tipoCuenta:"",numCuenta:"",email:""});guardarNominaLS();refrescar();flash();}
+function agregarPersonaManual(){const g=LIBROS.find(l=>l.slug===est).grupo;
+  const fld=(id,lab,ph,req)=>`<div style="margin-bottom:9px"><label style="display:block;font-size:11.5px;font-weight:600;color:var(--gris);margin-bottom:3px">${lab}${req?" *":""}</label><input type="text" id="np_${id}" placeholder="${ph||""}" style="width:100%"></div>`;
+  $("liq").innerHTML=`<div class="top"><h2>＋ Agregar persona</h2><div class="s">Nómina ${g} · completa la plantilla base</div></div>
+    <div class="body" style="max-height:62vh;overflow:auto">
+    ${fld("rut","RUT","12345678-9",1)}${fld("nombre","Nombre","",1)}${fld("apellido","Apellido","",1)}
+    ${fld("telefono","Teléfono","9 1234 5678")}
+    <div style="margin-bottom:9px"><label style="display:block;font-size:11.5px;font-weight:600;color:var(--gris);margin-bottom:3px">Banco</label><input type="text" id="np_banco" list="dl_bancos" placeholder="Elige o escribe" style="width:100%"><datalist id="dl_bancos"><option>ESTADO</option><option>SANTANDER</option><option>BCI</option><option>CHILE</option><option>FALABELLA</option><option>SCOTIABANK</option><option>ITAU</option><option>BICE</option><option>SECURITY</option><option>COOPEUCH</option><option>RIPLEY</option><option>CONSORCIO</option></datalist></div>
+    <div style="margin-bottom:9px"><label style="display:block;font-size:11.5px;font-weight:600;color:var(--gris);margin-bottom:3px">Tipo cuenta</label><select id="np_tipoCuenta" style="width:100%"><option value=""></option><option>CUENTA CORRIENTE</option><option>CUENTA VISTA</option><option>RUT</option><option>AHORRO</option></select></div>
+    ${fld("numCuenta","N° cuenta","")}${fld("email","Email","correo@ejemplo.cl")}
+    </div>
+    <div class="foot"><button class="b-ghost" onclick="cerrar()">Cancelar</button><button class="b-primary" onclick="guardarPersonaNueva()">💾 Guardar persona</button></div>`;
+  $("modal").classList.add("show");setTimeout(function(){const e=$("np_rut");if(e)e.focus();},50);}
+function guardarPersonaNueva(){const v=id=>{const e=$("np_"+id);return e?e.value.trim():"";};
+  const rut=v("rut"),nombre=v("nombre"),apellido=v("apellido");
+  if(!rut||!/\d/.test(rut)){alert("Ingresa un RUT válido.");return;}
+  if(!nombre){alert("Ingresa el nombre.");return;}
+  if(!apellido){alert("Ingresa el apellido.");return;}
+  if(TODOS.some(p=>normRut(p.rut)===normRut(rut))){alert("Ya existe una persona con ese RUT en la nómina.");return;}
+  const g=LIBROS.find(l=>l.slug===est).grupo;
+  TODOS.push({rut,nombre,apellido,cargo:g,grupo:g,telefono:v("telefono"),banco:v("banco"),tipoCuenta:v("tipoCuenta"),numCuenta:v("numCuenta"),email:v("email")});
+  guardarNominaLS();cerrar();refrescar();flash();}
 function restaurarNomina(){if(!confirm("¿Restaurar nómina original? (los turnos no se borran)"))return;localStorage.removeItem(NKEY);TODOS=cargarNomina();refrescar();flash();}
 function filaApersona(obj){const norm={};Object.keys(obj).forEach(k=>{norm[k.toString().toLowerCase().replace(/[^a-z0-9]/g,"")]=obj[k];});
   const get=(...keys)=>{for(const w of keys){if(w in norm)return (norm[w]??"").toString().trim();}for(const w of keys){for(const kn of Object.keys(norm)){if(kn.includes(w))return (norm[kn]??"").toString().trim();}}return "";};
